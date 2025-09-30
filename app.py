@@ -1,5 +1,3 @@
-print("hello world")
-print("hola dlrow")
+import customtkinter
+import pandas
 
-
-print("hellooooo")
