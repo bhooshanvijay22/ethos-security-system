@@ -26,7 +26,7 @@ customtkinter.set_default_color_theme("blue")
 # Create the main application window
 app = customtkinter.CTk()
 app.title("Campus Security Monitor")
-app.geometry("1000x700")
+app.geometry("1000x550") 
 
 # --- HELPER FUNCTION TO GET FULL PROFILE DATA ---
 def get_profile_by_id(entity_id):
@@ -42,6 +42,39 @@ def get_profile_by_id(entity_id):
         return match_row.iloc[0].to_dict()
     return None
 
+# --- UI VISIBILITY FUNCTIONS ---
+
+def show_timeline_view():
+    """Hides the Profile Matches box and shows the Timeline widgets."""
+    
+    # 1. Hide the Profile Matches frame
+    results_scroll_frame.pack_forget()
+    
+    # 2. Show the Timeline widgets
+    app.geometry("1000x700") 
+    timeline_close_button.pack(pady=(10, 5), padx=60, anchor="e")
+    result_textbox.pack(pady=(0, 10), padx=60, fill="both", expand=True)
+
+def hide_timeline_view():
+    """Hides the Timeline widgets and shows the Profile Matches box."""
+    
+    # 1. Hide the Timeline widgets
+    timeline_close_button.pack_forget()
+    result_textbox.pack_forget()
+    # Shrink the window back
+    app.geometry("1000x550") 
+    
+    # 2. Show the Profile Matches frame again
+    results_scroll_frame.pack(pady=10, padx=60, fill="both", expand=True)
+
+# --- NEW: Function to sync Combobox selection with Entry ---
+def combobox_callback(choice):
+    """
+    Called when an item is selected from the dropdown. 
+    It copies the selected item into the main search entry box.
+    """
+    entity_entry.delete(0, customtkinter.END)  # Clear current entry content
+    entity_entry.insert(0, choice)             # Insert the selected choice
 
 # --- CORE FUNCTIONS ---
 
@@ -52,6 +85,7 @@ def update_dropdown(event=None):
     if search_term:
         filtered_options = [opt for opt in ALL_ENTITY_IDENTIFIERS if search_term.lower() in opt.lower()]
     else:
+        # If the search bar is empty, show a sample list
         filtered_options = ALL_ENTITY_IDENTIFIERS[:10] 
     
     if not filtered_options:
@@ -63,17 +97,17 @@ def update_dropdown(event=None):
 def check_timeline_callback(entity_id):
     """
     Handles the click event for a Timeline button, fetches the profile, 
-    and calls the generate_timeline function.
+    and calls the generate_timeline function. Also shows the timeline view.
     """
+    show_timeline_view()
+
     result_textbox.delete("1.0", "end")
     result_textbox.insert("1.0", f"Fetching timeline for Entity ID: {entity_id}...\n\n")
 
-    # 1. Get the full profile match dictionary
     entity_profile = get_profile_by_id(entity_id)
 
     if entity_profile:
         try:
-            # 2. Call the newly implemented backend function
             timeline_text = generate_timeline(entity_profile, ALL_DATA)
             result_textbox.insert("end", timeline_text)
         except Exception as e:
@@ -88,7 +122,8 @@ def search_button_callback():
     """
     selected_entity = entity_entry.get().strip() 
     
-    # Clear the results scroll frame before populating new results
+    hide_timeline_view()
+    
     for widget in results_scroll_frame.winfo_children():
         widget.destroy()
 
@@ -106,19 +141,14 @@ def search_button_callback():
         customtkinter.CTkLabel(results_scroll_frame, text=f"No profile matches found for '{selected_entity}'.", text_color="orange").pack(padx=10, pady=5, anchor="w")
         return
     
-    # Header for the results
     customtkinter.CTkLabel(results_scroll_frame, text=f"Found {len(matches)} match(es) for '{selected_entity}':", font=customtkinter.CTkFont(weight="bold")).pack(padx=10, pady=(10, 5), anchor="w")
     
-    # Iterate through matches and create a display row for each
     for i, match in enumerate(matches):
         
-        # --- 1. Create a sub-frame for each result to hold the text and button ---
         match_frame = customtkinter.CTkFrame(results_scroll_frame, fg_color="transparent")
         match_frame.pack(fill="x", padx=10, pady=5)
         
-        # --- 2. Build the descriptive text ---
         entity_role = match.get('role', 'N/A')
-        # Ensure we use 'entity_id' as the key for the timeline lookup
         entity_id = match.get('entity_id', 'N/A') 
         
         match_info = f"[{i+1}] Name: {match.get('name', 'N/A')} | ID: {entity_id} | Type: {entity_role}"
@@ -127,22 +157,18 @@ def search_button_callback():
             department = match.get('department', 'N/A')
             match_info += f" | Dept: {department}"
         
-        # --- 3. Display the details (left side) ---
         details_label = customtkinter.CTkLabel(match_frame, text=match_info, justify="left", wraplength=500)
         details_label.pack(side="left", padx=5, pady=5)
 
-        # --- 4. Create the Timeline Button (right side) ---
         if entity_id != 'N/A':
-            # IMPORTANT: Use lambda to capture the entity_id for the button's command
             timeline_button = customtkinter.CTkButton(
                 match_frame, 
                 text="Check Timeline", 
                 width=150,
-                command=lambda id=entity_id: check_timeline_callback(id)
+                command=lambda id=entity_id: check_timeline_callback(id) 
             )
             timeline_button.pack(side="right", padx=5, pady=5)
         
-        # Add a separator line
         customtkinter.CTkFrame(results_scroll_frame, height=1, fg_color="gray").pack(fill="x", padx=10)
 
 
@@ -159,10 +185,13 @@ entity_entry = customtkinter.CTkEntry(control_frame, placeholder_text="Type name
 entity_entry.bind("<KeyRelease>", update_dropdown) 
 entity_entry.pack(side="left", padx=(10, 5), pady=10, fill="x", expand=True)
 
+# Filtered Dropdown (Displays the suggested matches)
 entity_dropdown = customtkinter.CTkComboBox(
     control_frame, 
     values=ALL_ENTITY_IDENTIFIERS[:10],
-    width=200
+    width=200,
+    # 💥 KEY CHANGE: Add command to sync selection with the entry
+    command=combobox_callback 
 )
 entity_dropdown.set("Type to Search...") 
 entity_dropdown.pack(side="left", padx=5, pady=10)
@@ -170,15 +199,23 @@ entity_dropdown.pack(side="left", padx=5, pady=10)
 search_button = customtkinter.CTkButton(control_frame, text="Search Profiles", command=search_button_callback)
 search_button.pack(side="left", padx=(10, 10), pady=10)
 
-# --- Scrollable Frame for Dynamic Search Results and Buttons ---
+# Scrollable Frame for Dynamic Search Results and Buttons (Profile Matches)
 results_scroll_frame = customtkinter.CTkScrollableFrame(app, label_text="Profile Matches")
-results_scroll_frame.pack(pady=10, padx=60, fill="x", expand=False)
-results_scroll_frame.configure(height=200)
+results_scroll_frame.configure(height=200) 
 
-# Textbox to display the results (now dedicated for the Timeline output)
+# Button to close the timeline
+timeline_close_button = customtkinter.CTkButton(
+    app, 
+    text="Close Timeline ✖", 
+    width=150, 
+    command=hide_timeline_view
+)
+
+# Textbox to display the results (Timeline output)
 result_textbox = customtkinter.CTkTextbox(app, height=250)
-result_textbox.pack(pady=10, padx=60, fill="both", expand=True)
 result_textbox.insert("0.0", "Timeline results will be shown here after clicking 'Check Timeline'.")
 
+
 # --- RUN THE APP ---
+hide_timeline_view()
 app.mainloop()
