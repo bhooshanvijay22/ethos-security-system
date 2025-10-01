@@ -182,13 +182,23 @@ def generate_timeline(entity_identifiers: dict, all_data: dict, time_window=None
 
     for entry in timeline_entries:
         # Line 1: Time and Source, with no bolding
-        # 💥 BOLDING REMOVED 💥
         formatted_timeline_string += f"{entry['Timestamp']} | Source: {entry['Source'].upper()} \n"
 
         # Line 2 onwards: Details with clear indentation and simplified keys
         for key, value in entry['Details'].items():
-            # Clean up the key for display (e.g., replace underscores, capitalize)
-            display_key = key.replace('_', ' ').replace('(YES/NO)', 'Attended').strip().title()
+            
+            display_key = key
+            
+            # --- FIX APPLIED HERE ---
+            # 1. Handle the specific replacement for lab bookings key
+            if display_key == 'attended (YES/NO)':
+                display_key = 'Attended'
+            
+            # 2. Apply generic cleanups: replace underscores and title-case for all others
+            else:
+                # Clean up the key for display (e.g., replace underscores, capitalize)
+                display_key = display_key.replace('_', ' ').strip().title()
+            # --- END FIX ---
             
             # Use consistent indentation
             formatted_timeline_string += f"    {display_key}: {value}\n"
