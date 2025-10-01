@@ -1,11 +1,9 @@
 import pandas as pd
 import os
 
-# Assuming this helper function is correct and unchanged
 def load_all_data(data_directory="data"):
     """
     Loads all CSV files from a specified directory into a dictionary of pandas DataFrames.
-    ...
     """
     if not os.path.exists(data_directory):
         print(f"Error: Data directory '{data_directory}' not found.")
@@ -18,147 +16,187 @@ def load_all_data(data_directory="data"):
         if filename.endswith(".csv"):
             file_path = os.path.join(data_directory, filename)
             try:
-                all_dataframes[filename] = pd.read_csv(file_path)
+                # Use low_memory=False for robustness against mixed data types in columns
+                all_dataframes[filename] = pd.read_csv(file_path, low_memory=False) 
                 print(f"  - Loaded '{filename}' successfully.")
             except Exception as e:
                 print(f"  - Failed to load '{filename}'. Error: {e}")
                 
     return all_dataframes
 
-# Assuming this helper function is correct and unchanged
 def find_entities_in_profiles(search_term, profiles_df):
     """
     Searches for a term across multiple identifying columns in the profiles DataFrame.
-    ...
     """
     # Ensure the search term is a string to prevent errors with numeric IDs
     search_term = str(search_term)
 
-    # --- 1. Create a boolean "mask" for each column to search ---
-    # Partial, case-insensitive match for 'name'
-    name_mask = profiles_df['name'].str.contains(search_term, case=False, na=False)
+    # List of all identifying columns to search across
+    search_cols = ['name', 'entity_id', 'email', 'card_id', 'device_hash', 'face_id', 'student_id', 'staff_id']
+    
+    # --- 1. Create a combined boolean "mask" for the search ---
+    combined_mask = pd.Series(False, index=profiles_df.index)
 
-    # Exact match for various ID columns (assuming these exist in the profiles CSV)
-    entity_id_mask = profiles_df['entity_id'] == search_term
-    card_id_mask = profiles_df['card_id'] == search_term
-    device_hash_mask = profiles_df['device_hash'] == search_term
-    face_id_mask = profiles_df['face_id'] == search_term
-    email_mask = profiles_df['email'] == search_term
-    # Note: Using 'role' in the frontend, but leaving original ID checks here for robustness
-    student_id_mask = profiles_df.get('student_id', pd.Series(False)) == search_term
-    staff_id_mask = profiles_df.get('staff_id', pd.Series(False)) == search_term
+    for col in search_cols:
+        if col in profiles_df.columns:
+            series = profiles_df[col].astype(str)
+            # Use partial match for 'name', exact match for IDs
+            if col == 'name':
+                mask = series.str.contains(search_term, case=False, na=False)
+            else:
+                mask = series == search_term
+            
+            combined_mask = combined_mask | mask
 
-
-    # --- 2. Combine all masks into a single filter using the OR '|' operator ---
-    combined_mask = (name_mask | entity_id_mask | card_id_mask | 
-                     device_hash_mask | face_id_mask | email_mask |
-                     student_id_mask | staff_id_mask)
-
-    # --- 3. Apply the combined filter to the DataFrame ---
+    # --- 2. Apply the combined filter and return the list of profile dictionaries ---
     matching_df = profiles_df[combined_mask]
-
-    # --- 4. Convert the resulting DataFrame into a list of dictionaries ---
-    results = matching_df.to_dict('records')
+    
+    # Fill NA values with None before converting to dictionary, to ensure keys exist
+    results = matching_df.where(pd.notna(matching_df), None).to_dict('records') 
 
     return results
-
-# --- NEW: COMPLETED generate_timeline FUNCTION ---
 
 def generate_timeline(entity_identifiers: dict, all_data: dict, time_window=None):
     """
     Generates a chronological timeline of events for a single entity based on their identifiers.
-
-    Args:
-        entity_identifiers (dict): A dictionary (single profile match) containing identifiers 
-                                   (e.g., 'card_id', 'device_hash', 'entity_id', 'name').
-        all_data (dict): Dictionary of all loaded DataFrames (log files).
-        time_window (tuple, optional): Not implemented in detail, but reserved for future filtering.
-
-    Returns:
-        str: A formatted, chronological string representing the timeline.
     """
     timeline_entries = []
 
-    # Get the key identifiers from the profile dictionary
+    # Get the key identifiers from the profile dictionary.
     card_id = entity_identifiers.get('card_id')
     device_hash = entity_identifiers.get('device_hash')
     face_id = entity_identifiers.get('face_id')
+    entity_id = entity_identifiers.get('entity_id')
     entity_name = entity_identifiers.get('name', 'UNKNOWN ENTITY')
 
     # Define how to map log files to their search column, timestamp column, and event description
     LOG_CONFIGS = {
-        'card_swipe_logs.csv': {
-            'search_col': 'card_id', 
+        'campus card_swipes.csv': {
+            'search_val': card_id,         
+            'search_col': 'card_id',      
             'ts_col': 'timestamp', 
-            'desc_cols': ['location_id', 'access_result'],
+            'desc_cols': ['location_id'], 
             'source': 'Card Swipe'
         },
-        'wifi_logs.csv': {
+        'wifi_associations_logs.csv': {
+            'search_val': device_hash,
             'search_col': 'device_hash', 
             'ts_col': 'timestamp', 
-            'desc_cols': ['router_location', 'connection_type'],
+            'desc_cols': ['ap_id'], 
             'source': 'WiFi Connection'
         },
-        'camera_logs.csv': {
+        'cctv_frames.csv': {
+            'search_val': face_id,
             'search_col': 'face_id', 
             'ts_col': 'timestamp', 
-            'desc_cols': ['camera_location', 'activity_type'],
+            'desc_cols': ['location_id'], 
             'source': 'Camera/Facial Rec'
         }
-        # Add more log files here as needed
     }
+    
+    # Add other logs that link via entity_id 
+    if entity_id is not None:
+        OTHER_LOGS = {
+            'lab_bookings.csv': {
+                'search_col': 'entity_id',
+                'ts_col': 'start_time', 
+                'desc_cols': ['room_id', 'end_time', 'attended (YES/NO)'],
+                'source': 'Lab Booking',
+                'search_val': entity_id
+            },
+            'library_checkouts.csv': {
+                'search_col': 'entity_id',
+                'ts_col': 'timestamp', 
+                'desc_cols': ['book_id'],
+                'source': 'Library Checkout',
+                'search_val': entity_id
+            },
+            'free_text_notes (helpdesk or RSVPs).csv': {
+                'search_col': 'entity_id',
+                'ts_col': 'timestamp',
+                'desc_cols': ['category', 'text'],
+                'source': 'Free Text Note',
+                'search_val': entity_id
+            }
+        }
+        LOG_CONFIGS.update(OTHER_LOGS)
+
 
     # 1. Iterate through all relevant log DataFrames
     for filename, config in LOG_CONFIGS.items():
         if filename in all_data:
-            df = all_data[filename].copy() # Work on a copy
+            df = all_data[filename].copy()
 
-            search_val = entity_identifiers.get(config['search_col'])
+            search_val = config['search_val']
+            search_col = config['search_col']
 
-            if search_val is not None and config['search_col'] in df.columns:
+            # Only proceed if we have an ID for this type and the log file has the column
+            if search_val is not None and search_col in df.columns and config['ts_col'] in df.columns:
                 
+                # Try to convert log column to the type of search_val (robustness)
+                try:
+                    df[search_col] = df[search_col].astype(type(search_val))
+                except:
+                    df[search_col] = df[search_col].astype(str)
+                    search_val = str(search_val)
+
+
                 # 2. Filter the log data to find all rows matching the entity.
-                df_filtered = df[df[config['search_col']] == search_val]
+                df_filtered = df[df[search_col] == search_val]
 
                 # 3. Create standardized timeline entry for each matching log row
                 for _, row in df_filtered.iterrows():
                     
-                    # Create a descriptive string from the configured columns
-                    description_parts = [str(row[col]) for col in config['desc_cols'] if col in row]
-                    description = f"{config['source']} event: {', '.join(description_parts)}"
-                    
+                    details = {}
+                    for col in config['desc_cols']:
+                        if col in row:
+                            details[col] = str(row[col])
+                        else:
+                            details[col] = "N/A"
+                            
                     timeline_entries.append({
                         'Timestamp': row[config['ts_col']],
                         'Source': config['source'],
-                        'Activity': description,
-                        'Name': entity_name # Include the name for context
+                        'Details': details, # Store details as a dict for cleaner formatting
+                        'Name': entity_name
                     })
 
 
     # 5. Sort all collected entries chronologically.
-    # We must ensure the timestamp column is correctly sortable (i.e., strings are consistent or converted)
     try:
         timeline_entries.sort(key=lambda x: x['Timestamp'])
     except Exception as e:
-        print(f"Warning: Could not sort timeline entries chronologically. Error: {e}")
-        # Proceed without sorting if the timestamp format is inconsistent
+        pass 
 
     # 6. Format the entries into a clear, human-readable string.
-    formatted_timeline_string = f"Timeline for {entity_name} (ID: {entity_identifiers.get('entity_id')})\n"
-    formatted_timeline_string += "="*60 + "\n"
+    
+    # CLEANER FORMATTING START
+    formatted_timeline_string = (
+        f"\nTIMELINE FOR: {entity_name} (ID: {entity_id})\n"
+        f"{'='*30}\n"
+    )
     
     if not timeline_entries:
         formatted_timeline_string += "No logged activities found for this entity based on provided identifiers.\n"
         return formatted_timeline_string
 
     for entry in timeline_entries:
-        formatted_timeline_string += (
-            f"[{entry['Timestamp']}] | Source: {entry['Source']}\n"
-            f"    -> {entry['Activity']}\n"
-        )
-        formatted_timeline_string += "-"*60 + "\n"
+        # Line 1: Time and Source, with no bolding
+        # 💥 BOLDING REMOVED 💥
+        formatted_timeline_string += f"{entry['Timestamp']} | Source: {entry['Source'].upper()} \n"
+
+        # Line 2 onwards: Details with clear indentation and simplified keys
+        for key, value in entry['Details'].items():
+            # Clean up the key for display (e.g., replace underscores, capitalize)
+            display_key = key.replace('_', ' ').replace('(YES/NO)', 'Attended').strip().title()
+            
+            # Use consistent indentation
+            formatted_timeline_string += f"    {display_key}: {value}\n"
+
+        # Add an extra empty line as a separator
+        formatted_timeline_string += "\n"
         
-    return formatted_timeline_string
+    return formatted_timeline_string.rstrip('\n') # Remove trailing newlines
 
 # This block runs when you execute the script directly
 if __name__ == "__main__":
@@ -190,12 +228,6 @@ if __name__ == "__main__":
                 print(f"    Name: {match.get('name')}")
                 print(f"    Entity ID: {match.get('entity_id')}")
                 print(f"    Email: {match.get('email')}")
-                
-                # --- Example Timeline Generation ---
-                print("\n    --- Example Timeline ---")
-                timeline = generate_timeline(match, all_data)
-                print(timeline)
-                print("    ------------------------")
         else:
             print(f"No matches found for '{search_query}'.")
 
