@@ -90,7 +90,18 @@ def search_button_callback():
                 match_summary += f"--- Entity {i+1} ---\n"
                 match_summary += f"Name: {match.get('name', 'N/A')}\n"
                 match_summary += f"Entity ID: {match.get('entity_id', 'N/A')}\n"
-                match_summary += f"Type: {match.get('entity_type', 'N/A')}\n"
+                
+                # --- CORRECTED: Use 'role' column for type/role ---
+                entity_role = match.get('role', 'N/A')
+                match_summary += f"Type (Role): {entity_role}\n"
+                
+                # --- Check role and display department if it's a student ---
+                # Check for "student" case-insensitively just in case of data variance
+                if entity_role.lower() == 'student':
+                    # Assuming the department column is named 'department'
+                    department = match.get('department', 'N/A')
+                    match_summary += f"Department: {department}\n"
+                
                 match_summary += f"Email: {match.get('email', 'N/A')}\n"
                 match_summary += "\n"
             
@@ -119,18 +130,15 @@ label.pack(side="left", padx=(10, 0), pady=10)
 # 1. Search Entry (The main text input for typing)
 entity_entry = customtkinter.CTkEntry(control_frame, placeholder_text="Type name, ID, or email...")
 # Bind the <KeyRelease> event to the update_dropdown function
-# This triggers the filtering every time a key is released after typing
 entity_entry.bind("<KeyRelease>", update_dropdown) 
 entity_entry.pack(side="left", padx=(10, 5), pady=10, fill="x", expand=True)
 
 # 2. Filtered Dropdown (Displays the suggested matches)
-# The initial values are set, but they will be dynamically changed by update_dropdown
 entity_dropdown = customtkinter.CTkComboBox(
     control_frame, 
     values=ALL_ENTITY_IDENTIFIERS[:10], # Initial small list
     width=200 # Fixed width for a compact look
 )
-# Set the initial value to match the entry's state
 entity_dropdown.set("Type to Search...") 
 entity_dropdown.pack(side="left", padx=5, pady=10)
 
