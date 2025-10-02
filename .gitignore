@@ -5,7 +5,7 @@ test_two.py
 __pycache__/
 *.py[codz]
 *$py.class
-
+clean_data/
 # C extensions
 *.so
 
