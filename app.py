@@ -143,23 +143,24 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
 
-def train_location_predictor(all_data):
+def train_location_predictor(clean_data):
     """
     Trains a simple ML model (Random Forest) to predict next location
     based on entity_id + previous location logs.
     """
-    if "campus card_swipes.csv" not in all_data and "wifi_associations_logs.csv" not in all_data:
+    if "campus card_swipes.csv" not in clean_data and "wifi_associations_logs.csv" not in clean_data:
         print("No location data available for training.")
         return None, None
 
     # Combine logs (card swipes + wifi for simplicity)
     dfs = []
-    if "campus card_swipes.csv" in all_data:
-        df = all_data["campus card_swipes.csv"][["entity_id", "location_id", "timestamp"]].dropna()
+    if "campus card_swipes.csv" in clean_data:
+        df = clean_data["campus card_swipes.csv"][["entity_id", "location_id", "timestamp"]].dropna()
         df["source"] = "card"
         dfs.append(df)
-    if "wifi_associations_logs.csv" in all_data:
-        df = all_data["wifi_associations_logs.csv"][["entity_id", "ap_id", "timestamp"]].dropna()
+        
+    if "wifi_associations_logs.csv" in clean_data:
+        df = clean_data["wifi_associations_logs.csv"][["entity_id", "ap_id", "timestamp"]].dropna()
         df = df.rename(columns={"ap_id": "location_id"})
         df["source"] = "wifi"
         dfs.append(df)
