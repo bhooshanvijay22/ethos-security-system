@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 
-def load_all_data(data_directory="data"):
+def load_all_data(data_directory="clean_data"):
     """Loads all CSV files from a directory into a dictionary of pandas DataFrames."""
     if not os.path.exists(data_directory):
         print(f"Error: Data directory '{data_directory}' not found.")
