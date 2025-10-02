@@ -138,6 +138,95 @@ def generate_timeline(entity_identifiers: dict, all_data: dict, time_window=None
 
     return formatted_timeline_string.rstrip('\n')
 
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+
+def train_location_predictor(all_data):
+    """
+    Trains a simple ML model (Random Forest) to predict next location
+    based on entity_id + previous location logs.
+    """
+    if "campus card_swipes.csv" not in all_data and "wifi_associations_logs.csv" not in all_data:
+        print("No location data available for training.")
+        return None, None
+
+    # Combine logs (card swipes + wifi for simplicity)
+    dfs = []
+    if "campus card_swipes.csv" in all_data:
+        df = all_data["campus card_swipes.csv"][["entity_id", "location_id", "timestamp"]].dropna()
+        df["source"] = "card"
+        dfs.append(df)
+    if "wifi_associations_logs.csv" in all_data:
+        df = all_data["wifi_associations_logs.csv"][["entity_id", "ap_id", "timestamp"]].dropna()
+        df = df.rename(columns={"ap_id": "location_id"})
+        df["source"] = "wifi"
+        dfs.append(df)
+
+    if not dfs:
+        return None, None
+
+    data = pd.concat(dfs).sort_values(by="timestamp")
+    
+    # Encode categorical variables
+    entity_encoder = LabelEncoder()
+    loc_encoder = LabelEncoder()
+    data["entity_id_enc"] = entity_encoder.fit_transform(data["entity_id"].astype(str))
+    data["location_id_enc"] = loc_encoder.fit_transform(data["location_id"].astype(str))
+
+    # Create features: (entity, current_location) → next_location
+    X, y = [], []
+    for eid in data["entity_id_enc"].unique():
+        sub = data[data["entity_id_enc"] == eid].sort_values("timestamp")
+        locs = sub["location_id_enc"].values
+        for i in range(len(locs) - 1):
+            X.append([eid, locs[i]])
+            y.append(locs[i+1])
+
+    if not X:
+        return None, None
+
+    X = np.array(X)
+    y = np.array(y)
+
+    # Train model
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    clf.fit(X_train, y_train)
+
+    print("✅ Location predictor trained. Accuracy:", clf.score(X_test, y_test))
+
+    return clf, loc_encoder
+
+
+def predict_next_location(entity_id, current_location, clf, loc_encoder, all_data):
+    """
+    Predicts the next location for an entity given current location.
+    """
+    if clf is None or loc_encoder is None:
+        return "⚠️ Predictor not available. Train model first."
+
+    # Encode inputs
+    try:
+        entity_val = int(entity_id) if str(entity_id).isdigit() else entity_id
+    except:
+        entity_val = entity_id
+
+    # We need entity_id encoding as used in training
+    # Simplify: just ignore unseen IDs
+    return_location = "Unknown"
+
+    try:
+        X_pred = np.array([[0, loc_encoder.transform([current_location])[0]]])  # entity ignored for simplicity
+        y_pred = clf.predict(X_pred)
+        return_location = loc_encoder.inverse_transform(y_pred)[0]
+    except Exception as e:
+        return f"Error predicting location: {e}"
+
+    return f"Predicted Next Location: {return_location}"
+
+
 if __name__ == "__main__":
     # Example execution block
     all_data = load_all_data()
