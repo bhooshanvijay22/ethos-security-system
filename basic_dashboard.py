@@ -10,7 +10,7 @@ ALL_DATA = load_all_data()
 PROFILES_FILENAME = "student or staff profiles.csv"
 PROFILES_DF = ALL_DATA.get(PROFILES_FILENAME, pd.DataFrame())
 # Define the directory where face images are stored
-FACE_IMAGE_DIR = r"C:\Users\nirbh\ethos-security-system\data\face_images"
+FACE_IMAGE_DIR = r"data\face_images"
 
 # --- COMBOBOX DATA PREPARATION ---
 # Extract unique identifiers for the dynamic dropdown menu
