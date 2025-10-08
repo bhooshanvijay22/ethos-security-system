@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from ethos import config
+import config
 
 class DataCleaner:
     """

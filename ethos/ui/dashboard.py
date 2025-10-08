@@ -26,12 +26,10 @@ class DashboardApp:
         self._create_widgets()
 
     def run(self):
-        """Runs the main application loop."""
         self.hide_all_extra_views()
         self.app.mainloop()
 
     def _get_all_entity_identifiers(self):
-        """Gathers all unique identifiers from the profiles DataFrame."""
         if self.profiles_df.empty:
             return ["Data Not Loaded"]
         
@@ -42,7 +40,6 @@ class DashboardApp:
         return sorted(list(initial_options))
 
     def _create_widgets(self):
-        """Creates and configures all the UI widgets."""
         # Control Frame
         control_frame = customtkinter.CTkFrame(self.app)
         control_frame.pack(pady=20, padx=60, fill="x")

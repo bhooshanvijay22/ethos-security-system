@@ -20,6 +20,12 @@ class App:
             print("No pre-trained model found. Training a new one...")
             self.location_predictor.train(self.data_processor.all_data)
 
-        # Initialize and run the dashboard
+        # --- To switch between UIs, comment/uncomment the following lines ---
+
+        # --- Old CustomTkinter UI ---
         dashboard = DashboardApp(self.data_processor, self.location_predictor)
         dashboard.run()
+
+        # --- New Flet UI ---
+        # dashboard = FletDashboard(self.data_processor, self.location_predictor)
+        # dashboard.run()

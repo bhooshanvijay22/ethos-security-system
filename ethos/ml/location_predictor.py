@@ -8,9 +8,6 @@ from sklearn.preprocessing import LabelEncoder
 from ethos import config
 
 class LocationPredictor:
-    """
-    Manages the training, prediction, and persistence of the location prediction model.
-    """
     def __init__(self, model_dir=config.MODEL_DIR):
         self.model_dir = model_dir
         self.model_path = os.path.join(model_dir, config.LOCATION_PREDICTOR_MODEL_FILENAME)
@@ -21,13 +18,11 @@ class LocationPredictor:
         self._ensure_model_dir_exists()
 
     def _ensure_model_dir_exists(self):
-        """Creates the model directory if it doesn't exist."""
         if not os.path.exists(self.model_dir):
             os.makedirs(self.model_dir)
 
     def train(self, clean_data):
-        """Trains the location prediction model."""
-        required_files = ["campus card_swipes.csv", "wifi_associations_logs.csv", "profiles_cleaned.csv"]
+        required_files = ["campus card_swipes.csv", "wifi_associations_logs.csv", "profiles_cleaned.csv", "cctv_frames.csv", "lab_bookings.csv", "library_checkouts.csv"]
         if not all(f in clean_data for f in required_files):
             print("Missing required data for training predictor.")
             return False
@@ -56,7 +51,6 @@ class LocationPredictor:
         return True
 
     def predict(self, entity_id, current_location):
-        """Predicts the next location for an entity."""
         if self.model is None or current_location is None:
             return "Predictor not available or current location is unknown."
 
@@ -78,7 +72,6 @@ class LocationPredictor:
             return f"Error during prediction: {e}"
 
     def load_model(self):
-        """Loads the model and encoders from disk."""
         if os.path.exists(self.model_path) and os.path.exists(self.encoders_path):
             self.model = joblib.load(self.model_path)
             self.entity_encoder, self.loc_encoder = joblib.load(self.encoders_path)
@@ -87,32 +80,36 @@ class LocationPredictor:
         return False
 
     def save_model(self):
-        """Saves the model and encoders to disk."""
         if self.model is not None:
             joblib.dump(self.model, self.model_path)
             joblib.dump((self.entity_encoder, self.loc_encoder), self.encoders_path)
             print(f"Model saved to {self.model_dir}")
 
     def _prepare_training_data(self, clean_data):
-        """Prepares the training data by merging and cleaning datasets."""
         profiles = clean_data["profiles_cleaned.csv"][['entity_id', 'card_id', 'device_hash']].copy()
         swipes = pd.merge(clean_data["campus card_swipes.csv"].copy(), profiles, on='card_id', how='left')
         wifi = pd.merge(clean_data["wifi_associations_logs.csv"].copy(), profiles, on='device_hash', how='left')
-
+        lab_bookings = clean_data['lab_bookings.csv']
+        library_checkouts = clean_data['library_checkouts.csv']
         dfs = []
         if not swipes.empty:
             dfs.append(swipes[["entity_id", "location_id", "timestamp"]].dropna())
         if not wifi.empty:
             wifi = wifi.rename(columns={"ap_id": "location_id"})
             dfs.append(wifi[["entity_id", "location_id", "timestamp"]].dropna())
-
+        if not lab_bookings.empty:
+            lab_bookings = lab_bookings.rename(columns = {"room_id":"location_id", "start_time":"timestamp"})
+            dfs.append(lab_bookings[['entity_id', 'location_id', "timestamp"]])
+        if not library_checkouts.empty:
+            library_checkouts = library_checkouts[["entity_id", "timestamp"]]
+            library_checkouts['location_id'] = "library"
+            dfs.append(library_checkouts[['entity_id', 'location_id', 'timestamp']])
         if not dfs:
             return pd.DataFrame()
 
         return pd.concat(dfs).sort_values(by="timestamp").dropna(subset=['entity_id', 'location_id'])
 
     def _create_features(self, data):
-        """Creates features and labels for the model."""
         entity_encoder = LabelEncoder()
         loc_encoder = LabelEncoder()
         data["entity_id_enc"] = entity_encoder.fit_transform(data["entity_id"].astype(str))

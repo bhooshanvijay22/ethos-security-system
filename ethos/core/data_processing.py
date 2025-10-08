@@ -1,20 +1,18 @@
 import pandas as pd
 import os
 from ethos import config
+from ethos.core import cleaner as Sweeper
 
 class DataProcessor:
-    """
-    Handles loading data, finding entities, and generating timelines.
-    """
     def __init__(self, data_directory=config.CLEAN_DATA_DIR):
         self.data_directory = data_directory
         self.all_data = self._load_all_data()
         self.profiles_df = self.all_data.get(config.PROFILES_CLEANED_FILENAME, pd.DataFrame())
 
     def _load_all_data(self):
-        """Loads all CSV files from the data directory."""
         if not os.path.exists(self.data_directory):
-            print(f"Error: Data directory '{self.data_directory}' not found.")
+            cleaner = Sweeper.DataCleaner()
+            cleaner.run_cleaning_pipeline()
             return {}
 
         all_dataframes = {}
@@ -30,7 +28,6 @@ class DataProcessor:
         return all_dataframes
 
     def find_entities(self, search_term):
-        """Searches for a term in the profiles DataFrame."""
         search_term = str(search_term).lower()
         search_cols = ['name', 'entity_id', 'email', 'card_id', 'device_hash', 'face_id', 'student_id', 'staff_id']
         combined_mask = pd.Series(False, index=self.profiles_df.index)
@@ -48,7 +45,6 @@ class DataProcessor:
         return matching_df.where(pd.notna(matching_df), None).to_dict('records')
 
     def generate_timeline(self, entity_identifiers):
-        """Generates a chronological timeline of events for an entity."""
         timeline_entries = []
         entity_id = entity_identifiers.get('entity_id')
         entity_name = entity_identifiers.get('name', 'UNKNOWN ENTITY')
@@ -76,7 +72,6 @@ class DataProcessor:
         return self._format_timeline(timeline_entries, entity_name, entity_id)
 
     def _get_log_configs(self, entity_identifiers):
-        """Returns a dictionary of log configurations."""
         card_id = entity_identifiers.get('card_id')
         device_hash = entity_identifiers.get('device_hash')
         face_id = entity_identifiers.get('face_id')
@@ -98,7 +93,6 @@ class DataProcessor:
         return LOG_CONFIGS
 
     def _format_timeline(self, timeline_entries, entity_name, entity_id):
-        """Formats the timeline entries into a readable string."""
         if not timeline_entries:
             return f"\nTIMELINE FOR: {entity_name} (ID: {entity_id})\n{'='*30}\nNo logged activities found."
 
@@ -112,7 +106,6 @@ class DataProcessor:
         return formatted_timeline.rstrip('\n')
 
     def get_last_known_location(self, entity_identifiers):
-        """Finds the most recent location log entry for an entity."""
         card_id = entity_identifiers.get('card_id')
         device_hash = entity_identifiers.get('device_hash')
         
